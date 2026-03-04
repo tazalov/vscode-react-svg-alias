@@ -1,30 +1,58 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode'
+import { SvgDefinitionProvider } from './definitionProvider'
+import { ImportParser } from './importParser'
+import { getConfig } from './config'
+import { SUPPORTED_LANGUAGES } from './consts'
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-  // Use the console to output diagnostic information (console.log) and errors (console.error)
-  // This line of code will only be executed once when your extension is activated
-  console.log(
-    'Congratulations, your extension "react-svg-alias" is now active!',
-  )
+  console.log('[SVG Alias] Расширение активировано!')
 
-  // The command has been defined in the package.json file
-  // Now provide the implementation of the command with registerCommand
-  // The commandId parameter must match the command field in package.json
-  const disposable = vscode.commands.registerCommand(
-    'react-svg-alias.helloWorld',
-    () => {
-      // The code you place here will be executed every time your command is executed
-      // Display a message box to the user
-      vscode.window.showInformationMessage('Hello World from React SVG alias!')
+  const definitionProvider = new SvgDefinitionProvider()
+
+  SUPPORTED_LANGUAGES.forEach((language) => {
+    context.subscriptions.push(
+      vscode.languages.registerDefinitionProvider(
+        { language },
+        definitionProvider,
+      ),
+    )
+  })
+
+  const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
+    (e) => {
+      if (e.affectsConfiguration('reactSvgAlias')) {
+        ImportParser.clearCache()
+        const newConfig = getConfig()
+        definitionProvider.updateConfig(newConfig)
+        console.log(
+          '[SVG Alias] Конфигурация изменена — кеш очищен, конфиг обновлён',
+        )
+      }
     },
   )
 
-  context.subscriptions.push(disposable)
+  context.subscriptions.push(configChangeDisposable)
+
+  const closeDocumentDisposable = vscode.workspace.onDidCloseTextDocument(
+    (document) => {
+      ImportParser.removeFromCache(document)
+    },
+  )
+
+  context.subscriptions.push(closeDocumentDisposable)
+
+  const clearCacheCommand = vscode.commands.registerCommand(
+    'reactSvgAlias.clearCache',
+    () => {
+      ImportParser.clearCache()
+      vscode.window.showInformationMessage(
+        '[SVG Alias] Cache cleared successfully!',
+      )
+      console.log('[SVG Alias] Manual cache clear executed')
+    },
+  )
+
+  context.subscriptions.push(clearCacheCommand)
 }
 
-// This method is called when your extension is deactivated
 export function deactivate() {}
