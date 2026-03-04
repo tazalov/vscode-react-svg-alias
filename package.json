@@ -2,7 +2,7 @@
   "name": "react-svg-alias",
   "displayName": "React SVG alias",
   "description": "Resolving paths with aliases for SVG icons in your JSX/TSX components",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "publisher": "tazalov",
   "license": "MIT",
   "homepage": "https://github.com/tazalov/vscode-react-svg-alias/blob/dev/README.md",
