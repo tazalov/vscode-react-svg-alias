@@ -1,0 +1,57 @@
+name: Test Label Detection
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR Number to test'
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Test label detection
+        run: |
+          PR_NUMBER="${{ github.event.inputs.pr_number }}"
+          REPO="${{ github.repository }}"
+          
+          echo "=================================="
+          echo "Testing PR #$PR_NUMBER in $REPO"
+          echo "=================================="
+          
+          echo "Making API request..."
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/labels")
+          
+          echo "=================================="
+          echo "API RESPONSE:"
+          echo "=================================="
+          echo "$RESPONSE"
+          
+          echo "=================================="
+          echo "CHECKING FOR MINOR LABEL:"
+          echo "=================================="
+          
+          if echo "$RESPONSE" | jq -e '.[] | select(.name=="minor")' > /dev/null 2>&1; then
+            echo "✅ MINOR label FOUND!"
+            exit 0
+          else
+            echo "❌ MINOR label NOT found"
+            
+            echo "Labels found in response:"
+            echo "$RESPONSE" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 || echo "No labels found"
+            
+            if echo "$RESPONSE" | grep -q "message"; then
+              echo "=================================="
+              echo "ERROR DETECTED:"
+              echo "$RESPONSE" | grep -o '"message":"[^"]*"'
+            fi
+            
+            exit 1
+          fi

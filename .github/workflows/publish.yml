@@ -1,0 +1,159 @@
+name: Publish to Open VSX
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [ main ]
+
+jobs:
+  publish:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      
+      - name: Get PR details
+        id: pr
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          
+          REPO="${{ github.repository }}"
+          
+          LABELS_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/labels")
+          
+          if echo "$LABELS_JSON" | jq -e '.[] | select(.name=="major")' > /dev/null 2>&1; then
+            VERSION_TYPE="major"
+          elif echo "$LABELS_JSON" | jq -e '.[] | select(.name=="minor")' > /dev/null 2>&1; then
+            VERSION_TYPE="minor"
+          else
+            VERSION_TYPE="patch"
+          fi
+          
+          echo "title=$PR_TITLE" >> $GITHUB_OUTPUT
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$PR_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "version-type=$VERSION_TYPE" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Switch to main branch
+        run: |
+          git checkout main
+          git pull origin main
+      
+      - name: Bump version in main
+        id: bump
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          npm version ${{ steps.pr.outputs.version-type }} -m "Bump version to %s [skip ci]"
+          
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new-version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Version bumped to: $NEW_VERSION"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate CHANGELOG
+        run: |
+          NEW_VERSION="${{ steps.bump.outputs.new-version }}"
+          PR_TITLE="${{ steps.pr.outputs.title }}"
+          PR_BODY="${{ steps.pr.outputs.body }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          TODAY=$(date +%Y-%m-%d)
+          
+          FORMATTED_BODY=$(echo "$PR_BODY" | sed 's/^[*-]\s\+/* /' | sed '/^$/d' | sed 's/^/* /')
+          
+          cat > CHANGELOG.new << EOF
+          ## [$NEW_VERSION] - $TODAY
+          
+          ### $PR_TITLE
+          
+          $FORMATTED_BODY
+          
+          **Full Changes:** [#$PR_NUMBER](https://github.com/${{ github.repository }}/pull/$PR_NUMBER)
+          
+          EOF
+          
+          if [ -f CHANGELOG.md ]; then
+            cat CHANGELOG.md >> CHANGELOG.new
+          fi
+          
+          mv CHANGELOG.new CHANGELOG.md
+          
+          git add CHANGELOG.md package.json package-lock.json
+          git commit -m "chore(release): v$NEW_VERSION [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Publish to Open VSX
+        uses: HaaLeo/publish-vscode-extension@v1
+        with:
+          pat: ${{ secrets.OPEN_VSX_TOKEN }}
+      
+      - name: Sync dev with main
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          git fetch origin dev
+          git checkout dev
+          
+          echo "Current branch: $(git branch --show-current)"
+          echo "Merging main into dev..."
+          
+          git merge origin/main --no-ff -m "Merge main into dev after release v${{ steps.bump.outputs.new-version }} [skip ci]"
+          
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const newVersion = '${{ steps.bump.outputs.new-version }}';
+            const prTitle = '${{ steps.pr.outputs.title }}';
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `## ✅ Successfully released 🎉
+              
+              ### 📦 Version: **v${newVersion}** - ${prTitle}
+              
+              ### 📝 Changes included:
+              ${{ steps.pr.outputs.body }}
+              
+              ### 🔗 Links:
+              - [Open VSX](https://open-vsx.org/extension/${{ github.repository_owner }}/${{ github.event.repository.name }}/v${newVersion})
+              
+              ### 🔄 Sync:
+              - ✅ \`dev\` branch synced with \`main\`
+              `
+            });
