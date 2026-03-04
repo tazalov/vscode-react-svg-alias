@@ -3,21 +3,71 @@
   "displayName": "React SVG alias",
   "description": "Resolving paths with aliases for SVG icons in your JSX/TSX components",
   "version": "0.0.1",
+  "publisher": "tazalov",
+  "license": "MIT",
+  "homepage": "https://github.com/tazalov/vscode-react-svg-alias/blob/dev/README.md",
+  "bugs": {
+    "url": "https://github.com/tazalov/vscode-react-svg-alias/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tazalov/vscode-react-svg-alias.git"
+  },
+  "icon": "assets/icon.png",
   "engines": {
     "vscode": "^1.109.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "react-svg-alias.helloWorld",
-        "title": "Hello World"
+        "command": "reactSvgAlias.clearCache",
+        "title": "React SVG Alias: Clear Cache",
+        "description": "Clear the import parsing cache"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "React SVG Alias",
+      "properties": {
+        "reactSvgAlias.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable the React SVG Alias extension"
+        },
+        "reactSvgAlias.aliases": {
+          "type": "array",
+          "default": [
+            [
+              "@",
+              "src"
+            ]
+          ],
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": "Array of path aliases. Each alias is [alias, replacement]. Example: [['@', 'src']]"
+        },
+        "reactSvgAlias.maxFileSize": {
+          "type": "number",
+          "default": 100000,
+          "description": "Maximum file size (characters)"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -36,6 +86,10 @@
     "prepare": "husky"
   },
   "devDependencies": {
+    "@babel/parser": "^7.24.0",
+    "@babel/traverse": "^7.29.0",
+    "@babel/types": "^7.24.0",
+    "@types/babel__traverse": "^7.28.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.109.0",
