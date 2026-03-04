@@ -151,7 +151,7 @@ jobs:
               ${{ steps.pr.outputs.body }}
               
               ### 🔗 Links:
-              - [Open VSX](https://open-vsx.org/extension/${{ github.repository_owner }}/${{ github.event.repository.name }}/v${newVersion})
+              - [Open VSX](https://open-vsx.org/extension/${{ github.repository_owner }}/react-svg-alias/v${newVersion})
               
               ### 🔄 Sync:
               - ✅ \`dev\` branch synced with \`main\`
