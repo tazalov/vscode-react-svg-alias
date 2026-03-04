@@ -15,11 +15,14 @@ export function resolvePath(
 ): string {
   let resolvedPath = importPath
 
-  for (const [alias, replacement] of aliases) {
-    if (importPath.startsWith(alias + '/')) {
-      resolvedPath = importPath.replace(alias + '/', replacement + '/')
-      break
-    }
+  // Выбираем самый длинный matching алиас (обработка пересекающихся алиасов)
+  const matchedAlias = aliases
+    .filter(([alias]) => importPath.startsWith(alias + '/'))
+    .sort((a, b) => b[0].length - a[0].length)[0]
+
+  if (matchedAlias) {
+    const [alias, replacement] = matchedAlias
+    resolvedPath = importPath.replace(alias + '/', replacement + '/')
   }
 
   if (!path.isAbsolute(resolvedPath)) {
@@ -99,14 +102,17 @@ export async function findSvgFile(
  * @param line - Строка текста
  * @param fullMatch - Полное совпадение regex'а
  * @param matchContent - Содержимое группы совпадения (группа 1)
+ * @param matchIndex - Индекс совпадения в строке (для обработки multiple matches)
  * @returns Объект с start и end позициями
  */
 export function getMatchRange(
   line: string,
   fullMatch: string,
   matchContent: string,
+  matchIndex?: number,
 ) {
-  const fullMatchIndex = line.indexOf(fullMatch)
+  // Используем переданный индекс, или ищем в строке
+  const fullMatchIndex = matchIndex ?? line.indexOf(fullMatch)
   const contentIndex = fullMatch.indexOf(matchContent)
   const start = fullMatchIndex + contentIndex
   return { start, end: start + matchContent.length }

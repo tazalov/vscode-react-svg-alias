@@ -110,10 +110,15 @@ export class SvgDefinitionProvider implements vscode.DefinitionProvider {
     position: vscode.Position,
     importInfo: ImportInfo,
   ): string | null {
-    const pathMatch = line.match(IMPORT_PATH_REGEX)
+    const pathMatch = IMPORT_PATH_REGEX.exec(line)
     if (!pathMatch) return null
 
-    const range = getMatchRange(line, pathMatch[0], pathMatch[1])
+    const range = getMatchRange(
+      line,
+      pathMatch[0],
+      pathMatch[1],
+      pathMatch.index,
+    )
     const isInRange = isPositionInRange(position.character, range)
 
     return isInRange ? importInfo.importPath : null

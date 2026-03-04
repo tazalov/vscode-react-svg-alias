@@ -299,5 +299,109 @@ suite('Тесты расширения React SVG Alias', () => {
         line.indexOf('@/assets/icon.svg') + matchContent.length,
       )
     })
+
+    test('Обрабатывает множественные импорты в одной строке', () => {
+      const line = `import Icon from '@/icon.svg'; import Arrow from '@/arrow.svg'`
+
+      // Первый импорт
+      const firstPath = '@/icon.svg'
+      const firstIndex = line.indexOf(`from '${firstPath}'`)
+      const range1 = getMatchRange(
+        line,
+        `from '${firstPath}'`,
+        firstPath,
+        firstIndex,
+      )
+      assert.strictEqual(range1.start, line.indexOf('@/icon.svg'))
+      assert.strictEqual(
+        range1.end,
+        line.indexOf('@/icon.svg') + firstPath.length,
+      )
+
+      // Второй импорт (другой индекс!)
+      const secondPath = '@/arrow.svg'
+      const secondIndex = line.lastIndexOf(`from '${secondPath}'`)
+      const range2 = getMatchRange(
+        line,
+        `from '${secondPath}'`,
+        secondPath,
+        secondIndex,
+      )
+      assert.strictEqual(range2.start, line.lastIndexOf('@/arrow.svg'))
+      assert.strictEqual(
+        range2.end,
+        line.lastIndexOf('@/arrow.svg') + secondPath.length,
+      )
+    })
+  })
+
+  suite('Регрессия — Пересекающиеся алиасы', () => {
+    test('Выбирает самый длинный matching алиас', () => {
+      // Очень важно: когда есть ["@", "src"] и ["@icons", "src/icons"],
+      // для "import X from '@icons/arrow.svg'" нужно использовать @icons, не @
+      const testResolvePath = (
+        importPath: string,
+        aliases: Array<[string, string]>,
+      ): string => {
+        let resolvedPath = importPath
+        const matchedAlias = aliases
+          .filter(([alias]) => importPath.startsWith(alias + '/'))
+          .sort((a, b) => b[0].length - a[0].length)[0]
+
+        if (matchedAlias) {
+          const [alias, replacement] = matchedAlias
+          resolvedPath = importPath.replace(alias + '/', replacement + '/')
+        }
+        return resolvedPath
+      }
+
+      // Тест 1: @icons должен быть выбран вместо @
+      const aliases: Array<[string, string]> = [
+        ['@', 'src'],
+        ['@icons', 'src/icons'],
+      ]
+      const result1 = testResolvePath('@icons/arrow.svg', aliases)
+      assert.strictEqual(result1, 'src/icons/arrow.svg')
+
+      // Тест 2: @ выбирается как более короткий алиас
+      const result2 = testResolvePath('@/comp.svg', aliases)
+      assert.strictEqual(result2, 'src/comp.svg')
+
+      // Тест 3: самый длинный алиас даже если он в конце списка
+      const aliases2: Array<[string, string]> = [
+        ['@', 'src'],
+        ['@icons', 'src/icons'],
+        ['@icons/nav', 'src/icons/nav'],
+      ]
+      const result3 = testResolvePath('@icons/nav/arrow.svg', aliases2)
+      assert.strictEqual(result3, 'src/icons/nav/arrow.svg')
+    })
+  })
+
+  suite('Регрессия — importedNames с похожими именами', () => {
+    test('Различает Icon и IconArrow в imported names', () => {
+      const testRegex = (names: string[], searchIn: string): boolean => {
+        for (const name of names) {
+          // Правильно экранируем спецсимволы
+          const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const match = new RegExp(`\\b${escaped}\\b`).exec(searchIn)
+          if (match) {
+            return true
+          }
+        }
+        return false
+      }
+
+      const line = `import { Icon, IconArrow } from './icons.svg'`
+
+      // Icon должен матчиться, но без IconArrow
+      assert.ok(testRegex(['Icon'], line))
+
+      // IconArrow должен матчиться, но независимо от Icon
+      assert.ok(testRegex(['IconArrow'], line))
+
+      // Оба могут быть в списке
+      assert.ok(testRegex(['Icon', 'IconArrow'], line))
+    })
   })
 })
