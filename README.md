@@ -2,7 +2,7 @@
 
 A VS Code extension that enables seamless **Ctrl+Click navigation** to SVG files imported with **path aliases** in JSX/TSX components.
 
-## ✨ Features
+## Features
 
 - 🎨 **JSX/TSX Component Navigation** — navigate from `<IconArrow />` directly to the SVG file
 - ⚡ **Performance optimized** — file size limits and smart caching prevent slowdowns
@@ -10,7 +10,7 @@ A VS Code extension that enables seamless **Ctrl+Click navigation** to SVG files
 - 🔄 **Hot config reload** — VS Code settings changes apply instantly
 - 📦 **Babel-powered parsing** — robust import detection using Babel parser
 
-## ⚡ Installation
+## Installation
 
 1. Go to the [Open VSX](https://open-vsx.org/extension/tazalov/react-svg-alias) and download the extension (`.vsix` file).
 2. Open Visual Studio Code.
@@ -20,7 +20,7 @@ A VS Code extension that enables seamless **Ctrl+Click navigation** to SVG files
 6. Select the file and click *"Install"*.
 7. Wait for the installation to complete. Once finished, you will see a notification confirming that the extension has been installed.
 
-## 🚀 Quick Start
+## Quick Start
 
 1. **Install** the extension
 2. **Configure** your aliases in VS Code settings (match your `jsconfig.json/tsconfig.json`)
@@ -29,9 +29,9 @@ A VS Code extension that enables seamless **Ctrl+Click navigation** to SVG files
    - **`F12`** — VS Code's standard Go to Definition (when cursor on import/component)
    - **Right-click menu** → `Go to Definition` — context menu option
 
-## 📝 Important: What This Extension Does Do
+## Important: What This Extension Does Do
 
-### ✅ Works With
+### Works With
 
 **Imports with path aliases:**
 ```typescript
@@ -46,17 +46,15 @@ import * as Icons from '~/svg/icons.svg'
 <Icon className="my-icon" />  // ← Works with props too
 ```
 
-## 📚 Supported Import Patterns
+## Supported Import Patterns
 
 ### 1️⃣ Default Import with Alias
 
 ```typescript
 // @ alias pointing to src/
 import Icon from '@/assets/icons/arrow.svg'
-
 // Custom @icons alias
 import ChevronIcon from '@icons/chevron.svg'
-
 // ~ alias (root-relative)
 import ArrowIcon from '~/svg/arrow.svg'
 ```
@@ -66,7 +64,6 @@ import ArrowIcon from '~/svg/arrow.svg'
 ```typescript
 // Single import
 import { ArrowIcon } from '@/assets/icons.svg'
-
 // Multiple from same file
 import { ArrowIcon, ChevronIcon, CrossIcon } from '@icons/bundle.svg'
 ```
@@ -86,7 +83,6 @@ import {
 ```typescript
 // Import entire namespace
 import * as Icons from '@/assets/icons.svg'
-
 // Root-relative
 import * as UtilityIcons from '~/svg/icons.svg'
 ```
@@ -106,15 +102,12 @@ function MyComponent() {
     <div>
       {/* Ctrl+Click on "Icon" tag name → opens @/assets/icons/arrow.svg */}
       <Icon className="icon-small" />
-      
       {/* Ctrl+Click on "ChevronIcon" → opens @icons/navigation.svg */}
       <ChevronIcon direction="down" />
-      
       {/* With children */}
       <Icon>
         <span>Content</span>
       </Icon>
-      
       {/* Namespace usage */}
       <DashboardIcons.ArrowIcon />
     </div>
@@ -122,7 +115,7 @@ function MyComponent() {
 }
 ```
 
-### 📦 Path Alias Configuration
+### Path Alias Configuration
 
 #### Step 1: Configure in `jsconfig.json/tsconfig.json`
 
@@ -164,7 +157,7 @@ import Logo from '@app/logo.svg'                 // @app → src/app
 import Root from '~/config.svg'                  // ~ → .
 ```
 
-## ⚙️ Configuration Reference
+## Configuration Reference
 
 ### Settings
 
@@ -204,11 +197,11 @@ For the best user experience, add this to your VS Code `settings.json`:
 
 **Why?** If your extension finds multiple potential definitions, this setting makes VS Code automatically go to the first one instead of showing a picker dialog. This provides a seamless navigation experience.
 
-## 🔧 Requirements
+## Requirements
 
 - VS Code **1.109.0** or higher
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 ### Navigation not working?
 
@@ -224,11 +217,11 @@ For the best user experience, add this to your VS Code `settings.json`:
 - Run command: Open command palette (`Ctrl+Shift+P` or `Cmd+Shift+P`), then type and select `React SVG Alias: Clear Cache`
 - Or restart VS Code
 
-## 🤝 Contributing
+## Contributing
 
 Found a bug? Have a feature request? [Open an issue](https://github.com/tazalov/vscode-react-svg-alias/issues)
 
-## 📝 License
+## License
 
 MIT
 
