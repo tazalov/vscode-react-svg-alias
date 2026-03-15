@@ -3,7 +3,7 @@ import * as parser from '@babel/parser'
 import * as t from '@babel/types'
 import { ImportInfo } from './types'
 import traverse from '@babel/traverse'
-import { CACHE_SIZE, PARSER_OPTIONS } from './consts'
+import { CACHE_SIZE, PARSER_OPTIONS, SVG_IMPORT_PATTERN } from './consts'
 
 export class ImportParser {
   private static importCache: Map<
@@ -38,7 +38,7 @@ export class ImportParser {
         ImportDeclaration: (path) => {
           const importPath = path.node.source.value
 
-          if (!importPath.endsWith('.svg')) {
+          if (!SVG_IMPORT_PATTERN.test(importPath)) {
             return
           }
 

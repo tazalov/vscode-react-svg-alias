@@ -5,13 +5,10 @@ import {
   getMatchRange,
   isPositionInRange,
   resolvePath,
+  stripQueryParams,
 } from './utils'
 import { ExtensionConfig, ImportInfo } from './types'
-import {
-  DEFAULT_CONFIG,
-  IMPORT_PATH_REGEX,
-  SUPPORTED_LANGUAGES,
-} from './consts'
+import { DEFAULT_CONFIG, IMPORT_PATH_REGEX } from './consts'
 import { getConfig } from './config'
 
 export class SvgDefinitionProvider implements vscode.DefinitionProvider {
@@ -32,9 +29,8 @@ export class SvgDefinitionProvider implements vscode.DefinitionProvider {
     position: vscode.Position,
   ): Promise<vscode.Definition | null> {
     const isEnabled = this.extensionConfig.enabled
-    const isSupported = SUPPORTED_LANGUAGES.includes(document.languageId)
 
-    if (!isEnabled || !isSupported) {
+    if (!isEnabled) {
       return null
     }
 
@@ -218,7 +214,8 @@ export class SvgDefinitionProvider implements vscode.DefinitionProvider {
     }
 
     const workspaceRoot = workspaceFolder.uri.fsPath
-    const resolvedPath = resolvePath(importPath, workspaceRoot, config.aliases)
+    const cleanPath = stripQueryParams(importPath)
+    const resolvedPath = resolvePath(cleanPath, workspaceRoot, config.aliases)
     const svgPath = await findSvgFile(resolvedPath)
 
     if (!svgPath) {

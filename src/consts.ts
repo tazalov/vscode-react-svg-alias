@@ -3,8 +3,10 @@ import { ExtensionConfig } from './types'
 
 // Регулярка для парсинга пути из импорта
 export const IMPORT_PATH_REGEX = /from\s+['"]([^'"]+)['"]/
+// Паттерн для определения SVG импорта (включая query-параметры: ?react, ?component и т.д.)
+export const SVG_IMPORT_PATTERN = /\.svg(\?\w+)?$/
 // Размер кеша
-export const CACHE_SIZE = 10
+export const CACHE_SIZE = 50
 // Дефолтные значения для конфигурации
 export const DEFAULT_CONFIG: ExtensionConfig = {
   enabled: true,

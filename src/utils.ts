@@ -2,6 +2,16 @@ import * as path from 'path'
 import * as fs from 'fs'
 
 /**
+ * Убирает query-параметры из пути импорта (например ?react, ?component)
+ * @param importPath - Путь импорта для разрешения
+ * returns Нормализованный путь импорта
+ */
+export function stripQueryParams(importPath: string): string {
+  const queryIndex = importPath.indexOf('?')
+  return queryIndex === -1 ? importPath : importPath.slice(0, queryIndex)
+}
+
+/**
  * Разрешает путь к импорту с учетом алиасов и базовой директории
  * @param importPath - Путь импорта для разрешения
  * @param baseDir - Базовая директория для относительных путей

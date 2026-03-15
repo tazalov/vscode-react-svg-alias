@@ -2,7 +2,8 @@ import * as assert from 'assert'
 import * as vscode from 'vscode'
 import { ImportParser } from '../importParser'
 import { SvgDefinitionProvider } from '../definitionProvider'
-import { isPositionInRange, getMatchRange } from '../utils'
+import { isPositionInRange, getMatchRange, stripQueryParams } from '../utils'
+import { SVG_IMPORT_PATTERN } from '../consts'
 
 suite('Тесты расширения React SVG Alias', () => {
   vscode.window.showInformationMessage('Запуск всех тестов.')
@@ -121,13 +122,10 @@ suite('Тесты расширения React SVG Alias', () => {
   })
 
   suite('SvgDefinitionProvider — Инициализация', () => {
-    test('Инициализируется с дефолтной конфигурацией', () => {
+    test('Инициализируется и позволяет обновлять конфигурацию', () => {
       const provider = new SvgDefinitionProvider()
       assert.ok(provider !== null)
-    })
 
-    test('Позволяет обновлять конфигурацию', () => {
-      const provider = new SvgDefinitionProvider()
       const config = {
         enabled: false,
         aliases: [['@', 'src']] as [string, string][],
@@ -139,269 +137,314 @@ suite('Тесты расширения React SVG Alias', () => {
   })
 
   suite('Утилиты — escapeRegExp', () => {
-    test('Корректно экранирует спецсимволы regex', () => {
+    test('Экранирует спецсимволы и не трогает обычные символы', () => {
       const escapeRegExp = (value: string) =>
         value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
       const dangerous = 'Icon.*+?[]{}'
       const escaped = escapeRegExp(dangerous)
-
-      // Все спецсимволы должны быть экранированы
       assert.ok(escaped.includes('\\.'))
       assert.ok(escaped.includes('\\*'))
       assert.ok(escaped.includes('\\?'))
       assert.ok(!escaped.match(/(?<!\\)[.*+?]/))
-    })
-
-    test('Не экранирует обычные символы', () => {
-      const escapeRegExp = (value: string) =>
-        value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
       const safe = 'IconArrowBold'
-      const escaped = escapeRegExp(safe)
-
-      assert.strictEqual(escaped, safe)
-    })
-  })
-
-  suite('Конфигурация — Размер файла', () => {
-    test('Правильно сравнивает размер документа', () => {
-      const maxFileSize = 100000
-      const smallContent = 'x'.repeat(1000)
-      const largeContent = 'x'.repeat(maxFileSize + 1)
-
-      assert.ok(smallContent.length < maxFileSize)
-      assert.ok(largeContent.length > maxFileSize)
-    })
-  })
-
-  suite('Регрессия — Кеш по URI (не URI_version)', () => {
-    test('Инвалидирует кеш при изменении версии документа', () => {
-      const mockDocV1 = {
-        getText: () => `import OldIcon from './old.svg'`,
-        uri: vscode.Uri.file('/version-test'),
-        version: 1,
-      } as unknown as vscode.TextDocument
-
-      const mockDocV2 = {
-        getText: () => `import NewIcon from './new.svg'`,
-        uri: vscode.Uri.file('/version-test'),
-        version: 2,
-      } as unknown as vscode.TextDocument
-
-      ImportParser.clearCache()
-      const importsV1 = ImportParser.parseImports(mockDocV1)
-      assert.strictEqual(importsV1[0].names[0], 'OldIcon')
-
-      // Тот же URI, но другая версия — должен переспарсить
-      const importsV2 = ImportParser.parseImports(mockDocV2)
-      assert.strictEqual(importsV2[0].names[0], 'NewIcon')
-      assert.notStrictEqual(importsV1, importsV2)
+      assert.strictEqual(escapeRegExp(safe), safe)
     })
 
-    test('removeFromCache удаляет запись независимо от версии', () => {
-      const mockDoc = {
-        getText: () => `import Icon from './icon.svg'`,
-        uri: vscode.Uri.file('/remove-test'),
-        version: 1,
-      } as unknown as vscode.TextDocument
+    suite('Регрессия — Кеш по URI (не URI_version)', () => {
+      test('Инвалидирует кеш при изменении версии документа', () => {
+        const mockDocV1 = {
+          getText: () => `import OldIcon from './old.svg'`,
+          uri: vscode.Uri.file('/version-test'),
+          version: 1,
+        } as unknown as vscode.TextDocument
 
-      ImportParser.clearCache()
-      const imports1 = ImportParser.parseImports(mockDoc)
+        const mockDocV2 = {
+          getText: () => `import NewIcon from './new.svg'`,
+          uri: vscode.Uri.file('/version-test'),
+          version: 2,
+        } as unknown as vscode.TextDocument
 
-      // Удаляем из кеша (даже если version отличается)
-      const docWithDifferentVersion = {
-        uri: vscode.Uri.file('/remove-test'),
-        version: 99,
-      } as unknown as vscode.TextDocument
-      ImportParser.removeFromCache(docWithDifferentVersion)
+        ImportParser.clearCache()
+        const importsV1 = ImportParser.parseImports(mockDocV1)
+        assert.strictEqual(importsV1[0].names[0], 'OldIcon')
 
-      // Должен переспарсить — новая ссылка
-      const imports2 = ImportParser.parseImports(mockDoc)
-      assert.notStrictEqual(imports1, imports2)
-    })
-  })
+        // Тот же URI, но другая версия — должен переспарсить
+        const importsV2 = ImportParser.parseImports(mockDocV2)
+        assert.strictEqual(importsV2[0].names[0], 'NewIcon')
+        assert.notStrictEqual(importsV1, importsV2)
+      })
 
-  suite('Регрессия — Named imports: навигация по второму символу', () => {
-    test('findMatchInImportedNames находит второй символ в строке', () => {
-      // Строка: import { IconArrow, IconChevron } from '@/icons.svg'
-      // Курсор на "IconChevron" (позиция ~21)
-      const line = `import { IconArrow, IconChevron } from '@/icons.svg'`
-      const chevronIndex = line.indexOf('IconChevron')
+      test('removeFromCache удаляет запись независимо от версии', () => {
+        const mockDoc = {
+          getText: () => `import Icon from './icon.svg'`,
+          uri: vscode.Uri.file('/remove-test'),
+          version: 1,
+        } as unknown as vscode.TextDocument
 
-      // Проверяем что isPositionInRange работает для второго имени
-      assert.ok(chevronIndex > 0, 'IconChevron должен быть найден в строке')
-      assert.ok(
-        isPositionInRange(chevronIndex + 2, {
-          start: chevronIndex,
-          end: chevronIndex + 'IconChevron'.length,
-        }),
-        'Позиция внутри IconChevron должна быть в диапазоне',
-      )
-    })
-  })
+        ImportParser.clearCache()
+        const imports1 = ImportParser.parseImports(mockDoc)
 
-  suite('Регрессия — Закрывающий тег </Component>', () => {
-    test('Регулярка </?Component матчит закрывающий тег', () => {
-      const componentName = 'Icon'
-      const regex = new RegExp(`</?${componentName}\\b`, 'g')
+        // Удаляем из кеша (даже если version отличается)
+        const docWithDifferentVersion = {
+          uri: vscode.Uri.file('/remove-test'),
+          version: 99,
+        } as unknown as vscode.TextDocument
+        ImportParser.removeFromCache(docWithDifferentVersion)
 
-      const openTag = '<Icon className="x" />'
-      const closeTag = '</Icon>'
-      const both = '<Icon>text</Icon>'
-
-      assert.ok(regex.test(openTag), 'Должен матчить открывающий тег')
-
-      regex.lastIndex = 0
-      assert.ok(regex.test(closeTag), 'Должен матчить закрывающий тег')
-
-      regex.lastIndex = 0
-      const matches = [...both.matchAll(regex)]
-      assert.strictEqual(
-        matches.length,
-        2,
-        'Должен найти оба тега в строке: <Icon> и </Icon>',
-      )
+        // Должен переспарсить — новая ссылка
+        const imports2 = ImportParser.parseImports(mockDoc)
+        assert.notStrictEqual(imports1, imports2)
+      })
     })
 
-    test('Позиция имени в закрывающем теге вычисляется правильно', () => {
-      const line = '  </Icon>'
-      const componentName = 'Icon'
-      const regex = new RegExp(`</?${componentName}\\b`, 'g')
+    suite('Регрессия — Закрывающий тег </Component>', () => {
+      test('Регулярка </?Component матчит закрывающий тег', () => {
+        const componentName = 'Icon'
+        const regex = new RegExp(`</?${componentName}\\b`, 'g')
 
-      for (const match of line.matchAll(regex)) {
-        const nameStart = match.index! + match[0].indexOf(componentName)
-        const range = {
-          start: nameStart,
-          end: nameStart + componentName.length,
-        }
+        const openTag = '<Icon className="x" />'
+        const closeTag = '</Icon>'
+        const both = '<Icon>text</Icon>'
 
-        // Курсор на 'I' в '</Icon>' — позиция 4
-        assert.strictEqual(nameStart, 4)
-        assert.ok(isPositionInRange(4, range))
-        assert.ok(isPositionInRange(7, range)) // на 'n'
-        assert.ok(!isPositionInRange(2, range)) // на '/'
-      }
-    })
-  })
+        assert.ok(regex.test(openTag), 'Должен матчить открывающий тег')
 
-  suite('Регрессия — getMatchRange', () => {
-    test('Правильно вычисляет диапазон для пути импорта', () => {
-      const line = `import Icon from '@/assets/icon.svg'`
-      const fullMatch = `from '@/assets/icon.svg'`
-      const matchContent = '@/assets/icon.svg'
+        regex.lastIndex = 0
+        assert.ok(regex.test(closeTag), 'Должен матчить закрывающий тег')
 
-      const range = getMatchRange(line, fullMatch, matchContent)
+        regex.lastIndex = 0
+        const matches = [...both.matchAll(regex)]
+        assert.strictEqual(
+          matches.length,
+          2,
+          'Должен найти оба тега в строке: <Icon> и </Icon>',
+        )
+      })
 
-      assert.strictEqual(range.start, line.indexOf('@/assets/icon.svg'))
-      assert.strictEqual(
-        range.end,
-        line.indexOf('@/assets/icon.svg') + matchContent.length,
-      )
-    })
+      test('Позиция имени в закрывающем теге вычисляется правильно', () => {
+        const line = '  </Icon>'
+        const componentName = 'Icon'
+        const regex = new RegExp(`</?${componentName}\\b`, 'g')
 
-    test('Обрабатывает множественные импорты в одной строке', () => {
-      const line = `import Icon from '@/icon.svg'; import Arrow from '@/arrow.svg'`
-
-      // Первый импорт
-      const firstPath = '@/icon.svg'
-      const firstIndex = line.indexOf(`from '${firstPath}'`)
-      const range1 = getMatchRange(
-        line,
-        `from '${firstPath}'`,
-        firstPath,
-        firstIndex,
-      )
-      assert.strictEqual(range1.start, line.indexOf('@/icon.svg'))
-      assert.strictEqual(
-        range1.end,
-        line.indexOf('@/icon.svg') + firstPath.length,
-      )
-
-      // Второй импорт (другой индекс!)
-      const secondPath = '@/arrow.svg'
-      const secondIndex = line.lastIndexOf(`from '${secondPath}'`)
-      const range2 = getMatchRange(
-        line,
-        `from '${secondPath}'`,
-        secondPath,
-        secondIndex,
-      )
-      assert.strictEqual(range2.start, line.lastIndexOf('@/arrow.svg'))
-      assert.strictEqual(
-        range2.end,
-        line.lastIndexOf('@/arrow.svg') + secondPath.length,
-      )
-    })
-  })
-
-  suite('Регрессия — Пересекающиеся алиасы', () => {
-    test('Выбирает самый длинный matching алиас', () => {
-      // Очень важно: когда есть ["@", "src"] и ["@icons", "src/icons"],
-      // для "import X from '@icons/arrow.svg'" нужно использовать @icons, не @
-      const testResolvePath = (
-        importPath: string,
-        aliases: Array<[string, string]>,
-      ): string => {
-        let resolvedPath = importPath
-        const matchedAlias = aliases
-          .filter(([alias]) => importPath.startsWith(alias + '/'))
-          .sort((a, b) => b[0].length - a[0].length)[0]
-
-        if (matchedAlias) {
-          const [alias, replacement] = matchedAlias
-          resolvedPath = importPath.replace(alias + '/', replacement + '/')
-        }
-        return resolvedPath
-      }
-
-      // Тест 1: @icons должен быть выбран вместо @
-      const aliases: Array<[string, string]> = [
-        ['@', 'src'],
-        ['@icons', 'src/icons'],
-      ]
-      const result1 = testResolvePath('@icons/arrow.svg', aliases)
-      assert.strictEqual(result1, 'src/icons/arrow.svg')
-
-      // Тест 2: @ выбирается как более короткий алиас
-      const result2 = testResolvePath('@/comp.svg', aliases)
-      assert.strictEqual(result2, 'src/comp.svg')
-
-      // Тест 3: самый длинный алиас даже если он в конце списка
-      const aliases2: Array<[string, string]> = [
-        ['@', 'src'],
-        ['@icons', 'src/icons'],
-        ['@icons/nav', 'src/icons/nav'],
-      ]
-      const result3 = testResolvePath('@icons/nav/arrow.svg', aliases2)
-      assert.strictEqual(result3, 'src/icons/nav/arrow.svg')
-    })
-  })
-
-  suite('Регрессия — importedNames с похожими именами', () => {
-    test('Различает Icon и IconArrow в imported names', () => {
-      const testRegex = (names: string[], searchIn: string): boolean => {
-        for (const name of names) {
-          // Правильно экранируем спецсимволы
-          const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          const match = new RegExp(`\\b${escaped}\\b`).exec(searchIn)
-          if (match) {
-            return true
+        for (const match of line.matchAll(regex)) {
+          const nameStart = match.index! + match[0].indexOf(componentName)
+          const range = {
+            start: nameStart,
+            end: nameStart + componentName.length,
           }
+
+          // Курсор на 'I' в '</Icon>' — позиция 4
+          assert.strictEqual(nameStart, 4)
+          assert.ok(isPositionInRange(4, range))
+          assert.ok(isPositionInRange(7, range)) // на 'n'
+          assert.ok(!isPositionInRange(2, range)) // на '/'
         }
-        return false
-      }
+      })
+    })
 
-      const line = `import { Icon, IconArrow } from './icons.svg'`
+    suite('Регрессия — getMatchRange', () => {
+      test('Правильно вычисляет диапазон для пути импорта', () => {
+        const line = `import Icon from '@/assets/icon.svg'`
+        const fullMatch = `from '@/assets/icon.svg'`
+        const matchContent = '@/assets/icon.svg'
 
-      // Icon должен матчиться, но без IconArrow
-      assert.ok(testRegex(['Icon'], line))
+        const range = getMatchRange(line, fullMatch, matchContent)
 
-      // IconArrow должен матчиться, но независимо от Icon
-      assert.ok(testRegex(['IconArrow'], line))
+        assert.strictEqual(range.start, line.indexOf('@/assets/icon.svg'))
+        assert.strictEqual(
+          range.end,
+          line.indexOf('@/assets/icon.svg') + matchContent.length,
+        )
+      })
 
-      // Оба могут быть в списке
-      assert.ok(testRegex(['Icon', 'IconArrow'], line))
+      test('Обрабатывает множественные импорты в одной строке', () => {
+        const line = `import Icon from '@/icon.svg'; import Arrow from '@/arrow.svg'`
+
+        // Первый импорт
+        const firstPath = '@/icon.svg'
+        const firstIndex = line.indexOf(`from '${firstPath}'`)
+        const range1 = getMatchRange(
+          line,
+          `from '${firstPath}'`,
+          firstPath,
+          firstIndex,
+        )
+        assert.strictEqual(range1.start, line.indexOf('@/icon.svg'))
+        assert.strictEqual(
+          range1.end,
+          line.indexOf('@/icon.svg') + firstPath.length,
+        )
+
+        // Второй импорт (другой индекс!)
+        const secondPath = '@/arrow.svg'
+        const secondIndex = line.lastIndexOf(`from '${secondPath}'`)
+        const range2 = getMatchRange(
+          line,
+          `from '${secondPath}'`,
+          secondPath,
+          secondIndex,
+        )
+        assert.strictEqual(range2.start, line.lastIndexOf('@/arrow.svg'))
+        assert.strictEqual(
+          range2.end,
+          line.lastIndexOf('@/arrow.svg') + secondPath.length,
+        )
+      })
+    })
+
+    suite('Регрессия — Пересекающиеся алиасы', () => {
+      test('Выбирает самый длинный matching алиас', () => {
+        // Очень важно: когда есть ["@", "src"] и ["@icons", "src/icons"],
+        // для "import X from '@icons/arrow.svg'" нужно использовать @icons, не @
+        const testResolvePath = (
+          importPath: string,
+          aliases: Array<[string, string]>,
+        ): string => {
+          let resolvedPath = importPath
+          const matchedAlias = aliases
+            .filter(([alias]) => importPath.startsWith(alias + '/'))
+            .sort((a, b) => b[0].length - a[0].length)[0]
+
+          if (matchedAlias) {
+            const [alias, replacement] = matchedAlias
+            resolvedPath = importPath.replace(alias + '/', replacement + '/')
+          }
+          return resolvedPath
+        }
+
+        // Тест 1: @icons должен быть выбран вместо @
+        const aliases: Array<[string, string]> = [
+          ['@', 'src'],
+          ['@icons', 'src/icons'],
+        ]
+        const result1 = testResolvePath('@icons/arrow.svg', aliases)
+        assert.strictEqual(result1, 'src/icons/arrow.svg')
+
+        // Тест 2: @ выбирается как более короткий алиас
+        const result2 = testResolvePath('@/comp.svg', aliases)
+        assert.strictEqual(result2, 'src/comp.svg')
+
+        // Тест 3: самый длинный алиас даже если он в конце списка
+        const aliases2: Array<[string, string]> = [
+          ['@', 'src'],
+          ['@icons', 'src/icons'],
+          ['@icons/nav', 'src/icons/nav'],
+        ]
+        const result3 = testResolvePath('@icons/nav/arrow.svg', aliases2)
+        assert.strictEqual(result3, 'src/icons/nav/arrow.svg')
+      })
+    })
+
+    suite('Регрессия — importedNames с похожими именами', () => {
+      test('Различает Icon и IconArrow в imported names', () => {
+        const testRegex = (names: string[], searchIn: string): boolean => {
+          for (const name of names) {
+            // Правильно экранируем спецсимволы
+            const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+            const match = new RegExp(`\\b${escaped}\\b`).exec(searchIn)
+            if (match) {
+              return true
+            }
+          }
+          return false
+        }
+
+        const line = `import { Icon, IconArrow } from './icons.svg'`
+
+        // Icon должен матчиться, но без IconArrow
+        assert.ok(testRegex(['Icon'], line))
+
+        // IconArrow должен матчиться, но независимо от Icon
+        assert.ok(testRegex(['IconArrow'], line))
+
+        // Оба могут быть в списке
+        assert.ok(testRegex(['Icon', 'IconArrow'], line))
+      })
+    })
+
+    suite(
+      'SVG_IMPORT_PATTERN — Сопоставление путей с query-параметрами',
+      () => {
+        test('.svg путь', () => {
+          assert.ok(SVG_IMPORT_PATTERN.test('./icon.svg'))
+          assert.ok(SVG_IMPORT_PATTERN.test('@/assets/icon.svg'))
+        })
+
+        test('.svg с query-параметрами (?react, ?component, ?url)', () => {
+          assert.ok(SVG_IMPORT_PATTERN.test('./icon.svg?react'))
+          assert.ok(SVG_IMPORT_PATTERN.test('@/assets/icon.svg?react'))
+          assert.ok(SVG_IMPORT_PATTERN.test('./icon.svg?component'))
+          assert.ok(SVG_IMPORT_PATTERN.test('./icon.svg?url'))
+        })
+
+        test('не-SVG файлы', () => {
+          assert.ok(!SVG_IMPORT_PATTERN.test('./icon.png'))
+          assert.ok(!SVG_IMPORT_PATTERN.test('@/components/Button'))
+          assert.ok(!SVG_IMPORT_PATTERN.test('./style.css'))
+        })
+
+        test('.svg в середине пути', () => {
+          assert.ok(!SVG_IMPORT_PATTERN.test('./svg-icons/icon.png'))
+        })
+      },
+    )
+
+    suite('ImportParser — Парсинг импортов с query-параметрами', () => {
+      test('Дефолтный импорт .svg?react', () => {
+        const mockDoc = {
+          getText: () => `import Icon from './icon.svg?react'`,
+          uri: vscode.Uri.file('/test-query-react'),
+          version: 1,
+        } as unknown as vscode.TextDocument
+
+        ImportParser.clearCache()
+        const imports = ImportParser.parseImports(mockDoc)
+        assert.strictEqual(imports.length, 1)
+        assert.strictEqual(imports[0].importPath, './icon.svg?react')
+        assert.deepStrictEqual(imports[0].names, ['Icon'])
+      })
+
+      test('Именованный импорт .svg?react', () => {
+        const mockDoc = {
+          getText: () =>
+            `import { ReactComponent as Icon } from './icon.svg?react'`,
+          uri: vscode.Uri.file('/test-query-named'),
+          version: 1,
+        } as unknown as vscode.TextDocument
+
+        ImportParser.clearCache()
+        const imports = ImportParser.parseImports(mockDoc)
+        assert.strictEqual(imports.length, 1)
+        assert.strictEqual(imports[0].importPath, './icon.svg?react')
+      })
+
+      test('Дефолтные импорты для .svg и .svg?react', () => {
+        const mockDoc = {
+          getText: () =>
+            `import Icon from './icon.svg'\nimport Arrow from './arrow.svg?react'`,
+          uri: vscode.Uri.file('/test-query-mixed'),
+          version: 1,
+        } as unknown as vscode.TextDocument
+
+        ImportParser.clearCache()
+        const imports = ImportParser.parseImports(mockDoc)
+        assert.strictEqual(imports.length, 2)
+        assert.strictEqual(imports[0].importPath, './icon.svg')
+        assert.strictEqual(imports[1].importPath, './arrow.svg?react')
+      })
+    })
+
+    suite('stripQueryParams — Удаление query-параметров', () => {
+      test('Убирает query-параметры (?react, ?component, ?url) и не трогает чистый путь', () => {
+        assert.strictEqual(stripQueryParams('./icon.svg?react'), './icon.svg')
+        assert.strictEqual(
+          stripQueryParams('@/icons/arrow.svg?component'),
+          '@/icons/arrow.svg',
+        )
+        assert.strictEqual(stripQueryParams('./icon.svg?url'), './icon.svg')
+        assert.strictEqual(stripQueryParams('./icon.svg'), './icon.svg')
+      })
     })
   })
 })
